@@ -1,0 +1,7 @@
+dist
+.next
+coverage
+node_modules
+prisma/migrations
+services
+*.md

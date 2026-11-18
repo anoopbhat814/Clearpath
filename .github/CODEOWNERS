@@ -1,0 +1,8 @@
+*                         @your-org/clearpath-maintainers
+/apps/api/                @your-org/clearpath-backend
+/apps/web/                @your-org/clearpath-frontend
+/prisma/                  @your-org/clearpath-backend @your-org/clearpath-data
+/services/analytics/      @your-org/clearpath-data
+/services/audit-gateway/  @your-org/clearpath-platform
+/deploy/                  @your-org/clearpath-platform
+/docs/security.md         @your-org/clearpath-security

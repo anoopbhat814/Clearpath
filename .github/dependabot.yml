@@ -1,0 +1,18 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 10
+  - package-ecosystem: pip
+    directory: /services/analytics
+    schedule: { interval: weekly }
+  - package-ecosystem: gomod
+    directory: /services/audit-gateway
+    schedule: { interval: weekly }
+  - package-ecosystem: docker
+    directory: /deploy
+    schedule: { interval: monthly }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: monthly }

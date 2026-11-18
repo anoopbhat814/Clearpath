@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: clearpath
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 10m
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [clearpath.example]
+      secretName: clearpath-tls
+  rules:
+    - host: clearpath.example
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend: { service: { name: clearpath-api, port: { number: 4000 } } }
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: clearpath-web, port: { number: 3000 } } }

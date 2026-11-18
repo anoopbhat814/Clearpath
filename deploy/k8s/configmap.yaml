@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clearpath-config
+data:
+  NODE_ENV: production
+  API_PORT: '4000'
+  WEB_ORIGIN: https://clearpath.example
+  ANALYTICS_URL: http://clearpath-analytics:8100
+  AUDIT_GATEWAY_URL: http://clearpath-audit-gateway:8200
+  LOG_LEVEL: info
+  REMINDER_LEAD_HOURS: '48'

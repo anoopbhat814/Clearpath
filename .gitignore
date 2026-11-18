@@ -1,0 +1,29 @@
+node_modules/
+dist/
+build/
+.next/
+coverage/
+*.log
+.env
+.env.local
+.DS_Store
+.idea/
+.vscode/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Go
+/services/audit-gateway/bin/
+*.test
+*.out
+
+# Generated
+openapi.json
+build-info.json

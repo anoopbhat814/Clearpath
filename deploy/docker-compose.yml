@@ -1,0 +1,58 @@
+name: clearpath
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: clearpath
+      POSTGRES_PASSWORD: clearpath
+      POSTGRES_DB: clearpath
+    ports: ['5432:5432']
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U clearpath']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  redis:
+    image: redis:7-alpine
+    ports: ['6379:6379']
+  api:
+    build: { context: .., dockerfile: deploy/Dockerfile.api }
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql://clearpath:clearpath@postgres:5432/clearpath
+      REDIS_URL: redis://redis:6379
+      ANALYTICS_URL: http://analytics:8100
+      AUDIT_GATEWAY_URL: http://audit-gateway:8200
+    ports: ['4000:4000']
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+  web:
+    build: { context: .., dockerfile: deploy/Dockerfile.web }
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:4000/api
+    ports: ['3000:3000']
+    depends_on: [api]
+  worker:
+    build: { context: .., dockerfile: deploy/Dockerfile.worker }
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql://clearpath:clearpath@postgres:5432/clearpath
+      REDIS_URL: redis://redis:6379
+    depends_on: [api, redis]
+  analytics:
+    build: ../services/analytics
+    ports: ['8100:8100']
+  audit-gateway:
+    build: ../services/audit-gateway
+    environment:
+      AUDIT_GATEWAY_SIGNING_KEY: ${AUDIT_GATEWAY_SIGNING_KEY:-change-me-gateway-hmac-key}
+      REDIS_URL: redis://redis:6379
+    ports: ['8200:8200']
+    depends_on: [redis]
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ['1025:1025', '8025:8025']
+volumes:
+  pgdata:

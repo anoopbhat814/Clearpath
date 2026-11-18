@@ -1,0 +1,15 @@
+name: Stale
+on:
+  schedule:
+    - cron: '0 6 * * *'
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    permissions: { issues: write, pull-requests: write }
+    steps:
+      - uses: actions/stale@v9
+        with:
+          days-before-stale: 45
+          days-before-close: 10
+          stale-issue-message: This issue has had no activity for 45 days and will be closed in 10 days unless updated.
+          exempt-issue-labels: security,roadmap

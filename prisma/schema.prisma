@@ -1,0 +1,620 @@
+// Clearpath data model. See docs/data-model.md for an annotated overview.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------- enums
+enum UserRole {
+  ADMIN
+  COORDINATOR
+  CLINICIAN
+  SCHEDULER
+  BED_MANAGER
+  ANALYST
+  AUDITOR
+}
+
+enum ReferralStatus {
+  DRAFT
+  SUBMITTED
+  TRIAGED
+  SCHEDULED
+  COMPLETED
+  DECLINED
+  CANCELLED
+}
+
+enum ReferralPriority {
+  ROUTINE
+  URGENT
+  EMERGENT
+}
+
+enum AuthStatus {
+  PENDING
+  SUBMITTED
+  APPROVED
+  DENIED
+  EXPIRED
+  APPEALED
+}
+
+enum BedStatus {
+  AVAILABLE
+  OCCUPIED
+  CLEANING
+  BLOCKED
+}
+
+enum WardType {
+  MEDICAL
+  SURGICAL
+  ICU
+  MATERNITY
+  PEDIATRIC
+  EMERGENCY
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  BLOCKED
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum ShiftStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum PathwayStatus {
+  ACTIVE
+  COMPLETED
+  WITHDRAWN
+}
+
+enum NetworkStatus {
+  IN_NETWORK
+  OUT_OF_NETWORK
+  PENDING
+}
+
+enum AuditAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  LOGIN
+  EXPORT
+}
+
+// ---------------------------------------------------------------- identity and directory
+model Organization {
+  id         String     @id @default(cuid())
+  name       String
+  slug       String     @unique
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  facilities Facility[]
+  users      User[]
+  plans      InsurancePlan[]
+
+  @@map("organizations")
+}
+
+model Facility {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  code           String
+  addressLine    String?
+  city           String?
+  region         String?
+  timezone       String       @default("UTC")
+  active         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  departments    Department[]
+  wards          Ward[]
+  staff          StaffMember[]
+  providers      Provider[]
+  referralsIn    Referral[]   @relation("ReferralDestination")
+  referralsOut   Referral[]   @relation("ReferralOrigin")
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@map("facilities")
+}
+
+model Department {
+  id         String   @id @default(cuid())
+  facilityId String
+  name       String
+  costCenter String?
+  createdAt  DateTime @default(now())
+  facility   Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  staff      StaffMember[]
+  boards     TaskBoard[]
+
+  @@unique([facilityId, name])
+  @@map("departments")
+}
+
+model User {
+  id             String         @id @default(cuid())
+  organizationId String
+  email          String         @unique
+  passwordHash   String
+  firstName      String
+  lastName       String
+  role           UserRole       @default(COORDINATOR)
+  active         Boolean        @default(true)
+  lastLoginAt    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  refreshTokens  RefreshToken[]
+  referralsCreated Referral[]   @relation("ReferralCreatedBy")
+  referralNotes  ReferralNote[]
+  authorizations PriorAuthorization[] @relation("AuthRequestedBy")
+  authEvents     AuthorizationEvent[]
+  tasksAssigned  Task[]         @relation("TaskAssignee")
+  tasksCreated   Task[]         @relation("TaskReporter")
+  taskComments   TaskComment[]
+  notifications  Notification[]
+  auditLogs      AuditLog[]
+  staffProfile   StaffMember?
+
+  @@index([organizationId, role])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  userAgent String?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("refresh_tokens")
+}
+
+model Specialty {
+  id        String              @id @default(cuid())
+  code      String              @unique
+  name      String
+  providers ProviderSpecialty[]
+  referrals Referral[]
+  pathways  CarePathway[]
+
+  @@map("specialties")
+}
+
+model Provider {
+  id            String              @id @default(cuid())
+  facilityId    String?
+  npi           String              @unique
+  firstName     String
+  lastName      String
+  credentials   String?
+  email         String?
+  phone         String?
+  networkStatus NetworkStatus       @default(IN_NETWORK)
+  acceptingNew  Boolean             @default(true)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  facility      Facility?           @relation(fields: [facilityId], references: [id], onDelete: SetNull)
+  specialties   ProviderSpecialty[]
+  referrals     Referral[]
+  shifts        Shift[]
+
+  @@index([lastName, firstName])
+  @@index([networkStatus, acceptingNew])
+  @@map("providers")
+}
+
+model ProviderSpecialty {
+  providerId  String
+  specialtyId String
+  primary     Boolean   @default(false)
+  provider    Provider  @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  specialty   Specialty @relation(fields: [specialtyId], references: [id], onDelete: Cascade)
+
+  @@id([providerId, specialtyId])
+  @@map("provider_specialties")
+}
+
+model InsurancePlan {
+  id             String       @id @default(cuid())
+  organizationId String
+  payerName      String
+  planName       String
+  planCode       String
+  requiresAuth   Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  coverages      Coverage[]
+
+  @@unique([organizationId, planCode])
+  @@map("insurance_plans")
+}
+
+// ---------------------------------------------------------------- referrals, pathways, authorizations
+model Patient {
+  id          String               @id @default(cuid())
+  mrn         String               @unique
+  firstName   String
+  lastName    String
+  dateOfBirth DateTime
+  sex         String?
+  phone       String?
+  email       String?
+  language    String               @default("en")
+  deceased    Boolean              @default(false)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  coverages   Coverage[]
+  referrals   Referral[]
+  enrollments PathwayEnrollment[]
+  authorizations PriorAuthorization[]
+  assignments BedAssignment[]
+  tasks       Task[]
+  riskScores  RiskScore[]
+
+  @@index([lastName, firstName])
+  @@index([dateOfBirth])
+  @@map("patients")
+}
+
+model Coverage {
+  id         String        @id @default(cuid())
+  patientId  String
+  planId     String
+  memberId   String
+  groupNumber String?
+  effectiveFrom DateTime
+  effectiveTo DateTime?
+  primary    Boolean       @default(true)
+  patient    Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  plan       InsurancePlan @relation(fields: [planId], references: [id])
+  authorizations PriorAuthorization[]
+
+  @@unique([planId, memberId])
+  @@index([patientId])
+  @@map("coverages")
+}
+
+model Referral {
+  id             String           @id @default(cuid())
+  reference      String           @unique
+  patientId      String
+  originFacilityId String?
+  destinationFacilityId String?
+  providerId     String?
+  specialtyId    String
+  createdById    String
+  status         ReferralStatus   @default(DRAFT)
+  priority       ReferralPriority @default(ROUTINE)
+  reason         String
+  clinicalSummary String?
+  requestedFor   DateTime?
+  triagedAt      DateTime?
+  scheduledAt    DateTime?
+  closedAt       DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  patient        Patient          @relation(fields: [patientId], references: [id])
+  originFacility Facility?        @relation("ReferralOrigin", fields: [originFacilityId], references: [id], onDelete: SetNull)
+  destinationFacility Facility?   @relation("ReferralDestination", fields: [destinationFacilityId], references: [id], onDelete: SetNull)
+  provider       Provider?        @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  specialty      Specialty        @relation(fields: [specialtyId], references: [id])
+  createdBy      User             @relation("ReferralCreatedBy", fields: [createdById], references: [id])
+  notes          ReferralNote[]
+  authorizations PriorAuthorization[]
+
+  @@index([status, priority, createdAt])
+  @@index([patientId])
+  @@index([providerId, scheduledAt])
+  @@map("referrals")
+}
+
+model ReferralNote {
+  id         String   @id @default(cuid())
+  referralId String
+  authorId   String
+  body       String
+  internal   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  referral   Referral @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  author     User     @relation(fields: [authorId], references: [id])
+
+  @@index([referralId, createdAt])
+  @@map("referral_notes")
+}
+
+model CarePathway {
+  id          String              @id @default(cuid())
+  specialtyId String?
+  code        String              @unique
+  name        String
+  description String?
+  version     Int                 @default(1)
+  published   Boolean             @default(false)
+  createdAt   DateTime            @default(now())
+  specialty   Specialty?          @relation(fields: [specialtyId], references: [id], onDelete: SetNull)
+  steps       PathwayStep[]
+  enrollments PathwayEnrollment[]
+
+  @@map("care_pathways")
+}
+
+model PathwayStep {
+  id         String      @id @default(cuid())
+  pathwayId  String
+  position   Int
+  title      String
+  description String?
+  dueAfterDays Int       @default(7)
+  requiresAuth Boolean   @default(false)
+  pathway    CarePathway @relation(fields: [pathwayId], references: [id], onDelete: Cascade)
+
+  @@unique([pathwayId, position])
+  @@map("pathway_steps")
+}
+
+model PathwayEnrollment {
+  id          String        @id @default(cuid())
+  patientId   String
+  pathwayId   String
+  status      PathwayStatus @default(ACTIVE)
+  currentStep Int           @default(1)
+  startedAt   DateTime      @default(now())
+  completedAt DateTime?
+  patient     Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  pathway     CarePathway   @relation(fields: [pathwayId], references: [id])
+
+  @@unique([patientId, pathwayId])
+  @@index([status])
+  @@map("pathway_enrollments")
+}
+
+model PriorAuthorization {
+  id            String     @id @default(cuid())
+  reference     String     @unique
+  patientId     String
+  coverageId    String
+  referralId    String?
+  requestedById String
+  serviceCode   String
+  serviceDescription String
+  status        AuthStatus @default(PENDING)
+  units         Int        @default(1)
+  submittedAt   DateTime?
+  decidedAt     DateTime?
+  validFrom     DateTime?
+  validUntil    DateTime?
+  denialReason  String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  patient       Patient    @relation(fields: [patientId], references: [id])
+  coverage      Coverage   @relation(fields: [coverageId], references: [id])
+  referral      Referral?  @relation(fields: [referralId], references: [id], onDelete: SetNull)
+  requestedBy   User       @relation("AuthRequestedBy", fields: [requestedById], references: [id])
+  events        AuthorizationEvent[]
+
+  @@index([status, validUntil])
+  @@index([patientId])
+  @@map("prior_authorizations")
+}
+
+model AuthorizationEvent {
+  id              String             @id @default(cuid())
+  authorizationId String
+  actorId         String?
+  fromStatus      AuthStatus?
+  toStatus        AuthStatus
+  note            String?
+  createdAt       DateTime           @default(now())
+  authorization   PriorAuthorization @relation(fields: [authorizationId], references: [id], onDelete: Cascade)
+  actor           User?              @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([authorizationId, createdAt])
+  @@map("authorization_events")
+}
+
+// ---------------------------------------------------------------- capacity and staffing
+model Ward {
+  id         String   @id @default(cuid())
+  facilityId String
+  name       String
+  type       WardType @default(MEDICAL)
+  floor      Int?
+  createdAt  DateTime @default(now())
+  facility   Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  beds       Bed[]
+
+  @@unique([facilityId, name])
+  @@map("wards")
+}
+
+model Bed {
+  id          String          @id @default(cuid())
+  wardId      String
+  label       String
+  status      BedStatus       @default(AVAILABLE)
+  isolation   Boolean         @default(false)
+  telemetry   Boolean         @default(false)
+  updatedAt   DateTime        @updatedAt
+  ward        Ward            @relation(fields: [wardId], references: [id], onDelete: Cascade)
+  assignments BedAssignment[]
+
+  @@unique([wardId, label])
+  @@index([status])
+  @@map("beds")
+}
+
+model BedAssignment {
+  id         String    @id @default(cuid())
+  bedId      String
+  patientId  String
+  admittedAt DateTime  @default(now())
+  expectedDischarge DateTime?
+  dischargedAt DateTime?
+  bed        Bed       @relation(fields: [bedId], references: [id])
+  patient    Patient   @relation(fields: [patientId], references: [id])
+
+  @@index([bedId, dischargedAt])
+  @@index([patientId])
+  @@map("bed_assignments")
+}
+
+model StaffMember {
+  id           String      @id @default(cuid())
+  userId       String      @unique
+  facilityId   String
+  departmentId String?
+  jobTitle     String
+  employeeCode String      @unique
+  maxWeeklyHours Int       @default(40)
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  facility     Facility    @relation(fields: [facilityId], references: [id])
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  shifts       Shift[]
+
+  @@index([facilityId, departmentId])
+  @@map("staff_members")
+}
+
+model Shift {
+  id         String      @id @default(cuid())
+  staffId    String
+  providerId String?
+  startsAt   DateTime
+  endsAt     DateTime
+  status     ShiftStatus @default(SCHEDULED)
+  role       String?
+  notes      String?
+  createdAt  DateTime    @default(now())
+  staff      StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  provider   Provider?   @relation(fields: [providerId], references: [id], onDelete: SetNull)
+
+  @@index([staffId, startsAt])
+  @@index([startsAt, endsAt])
+  @@map("shifts")
+}
+
+// ---------------------------------------------------------------- tasks, audit and analytics
+model TaskBoard {
+  id           String      @id @default(cuid())
+  departmentId String?
+  name         String
+  slaHours     Int         @default(24)
+  createdAt    DateTime    @default(now())
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  tasks        Task[]
+
+  @@map("task_boards")
+}
+
+model Task {
+  id          String       @id @default(cuid())
+  boardId     String
+  patientId   String?
+  assigneeId  String?
+  reporterId  String
+  title       String
+  description String?
+  status      TaskStatus   @default(OPEN)
+  priority    TaskPriority @default(NORMAL)
+  dueAt       DateTime?
+  completedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  board       TaskBoard    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  patient     Patient?     @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  assignee    User?        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  reporter    User         @relation("TaskReporter", fields: [reporterId], references: [id])
+  comments    TaskComment[]
+
+  @@index([boardId, status])
+  @@index([assigneeId, status])
+  @@index([dueAt])
+  @@map("tasks")
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  authorId  String
+  body      String
+  createdAt DateTime @default(now())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author    User     @relation(fields: [authorId], references: [id])
+
+  @@index([taskId, createdAt])
+  @@map("task_comments")
+}
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  actorId    String?
+  action     AuditAction
+  entityType String
+  entityId   String?
+  ip         String?
+  requestId  String?
+  metadata   Json?
+  createdAt  DateTime    @default(now())
+  actor      User?       @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([actorId, createdAt])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  kind      String
+  title     String
+  body      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+model RiskScore {
+  id         String   @id @default(cuid())
+  patientId  String
+  model      String
+  score      Float
+  band       String
+  factors    Json?
+  computedAt DateTime @default(now())
+  patient    Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, computedAt])
+  @@map("risk_scores")
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@clearpath/web",
+  "version": "1.4.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@clearpath/shared-types": "*",
+    "@clearpath/shared-utils": "*",
+    "@clearpath/ui": "*",
+    "next": "^14.2.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.0",
+    "eslint-config-next": "^14.2.3"
+  }
+}

@@ -1,0 +1,27 @@
+name: Lint
+on: [pull_request]
+jobs:
+  js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npm run lint
+      - run: npx prettier --check "{apps,packages,scripts}/**/*.{ts,tsx,js,json}"
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install ruff
+      - run: ruff check services/analytics
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.22' }
+      - run: test -z "$(gofmt -l services/audit-gateway)"

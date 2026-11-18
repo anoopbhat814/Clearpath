@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clearpath-audit-gateway
+  labels: { app: clearpath-audit-gateway }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: clearpath-audit-gateway }
+  template:
+    metadata:
+      labels: { app: clearpath-audit-gateway }
+    spec:
+      containers:
+        - name: audit-gateway
+          image: ghcr.io/your-org/clearpath-audit-gateway:1.4.0
+          ports: [{ containerPort: 8200 }]
+          envFrom:
+            - configMapRef: { name: clearpath-config }
+            - secretRef: { name: clearpath-secrets }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8200 }
+            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8200 }
+            initialDelaySeconds: 15
+          resources:
+            requests: { cpu: 100m, memory: 192Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clearpath-audit-gateway
+spec:
+  selector: { app: clearpath-audit-gateway }
+  ports: [{ port: 8200, targetPort: 8200 }]
