@@ -42,7 +42,7 @@ jobs:
     defaults: { run: { working-directory: services/audit-gateway } }
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with: { go-version: '1.22' }
       - run: go vet ./...
       - run: go test -race ./...
